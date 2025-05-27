@@ -9,7 +9,7 @@ This is the code that I used to do some preliminary analysis and comparisons bet
 This code is a bit messy and by no means complete. I'd like to get around to working on it again, but in the meantime perhaps what I have now may be helpful to you!
 
 ## Files
-I've only included the contents of src/ in this repository, but this is what the overall structure of my project directory looks like:
+I've only included the contents of src/ in this repository. annotations/ and data/ folders are uploaded to dropboc. This is what the overall structure of my project directory looks like:
 ```
 ├── LICENSE
 ├── README.md
@@ -39,9 +39,9 @@ I've only included the contents of src/ in this repository, but this is what the
 │   ├── GSM310439.CEL
 │   └── GSM310440.CEL
 ├── src
-│   ├── combined_heatmap.ipynb               # combined kuehn and wiggins datasets with chaotic giant hierarchical heatmap
-│   ├── kuehn_heatmap.ipynb                  # data loading and visualization code for kuehn dataset alone
-│   └── longo_processing.Rmd                 # preprocessing of longo dataset
+│   ├── combined_heatmap.ipynb                # combined kuehn and wiggins datasets with chaotic giant hierarchical heatmap
+│   ├── kuehn_heatmap.ipynb                   # data loading and visualization code for kuehn dataset alone
+│   └── longo_processing.Rmd                  # preprocessing of longo dataset
 └── wiggins_data
-    └── 4h_complete_counts_matrix.csv       # wiggins counts matrix
+    └── 4h_complete_counts_matrix.csv         # wiggins counts matrix
 ```
