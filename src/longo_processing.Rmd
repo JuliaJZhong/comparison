@@ -1,0 +1,164 @@
+ 
+title: "longo_processing"
+output: html_notebook
+ 
+```{r message=FALSE}
+library(affy)
+library(biomaRt)
+library(hgu133plus2.db)
+library(jetset) # TODO: not used, but consider using for optimizing 1-1 probe-gene mapping
+library(tibble)
+```
+
+ 
+Read .CEL files
+```{r}
+cel_path <- "longo_data"
+cel_files = list.files(path = cel_path, pattern = "\\.CEL$", full.names = TRUE)
+data <- ReadAffy(filenames = cel_files)
+```
+
+ 
+Normalize raw microarray data and extra Affymetrix probe IDs
+```{r}
+eset <- rma(data)
+matrix <- exprs(eset)
+probes <- rownames(matrix)
+dim(matrix)
+```
+
+ 
+Load data.frame from Bioconductor(BC) for mapping from Affymetrix HG-U133 Plus 2.0 probe IDs to ENSEMBL IDs
+```{r}
+BC_probe_to_ensg = toTable(hgu133plus2ENSEMBL)
+```
+
+ 
+Load data.frame from biomaRt(BM) for mapping from Affymetrix HG-U133 Plus 2.0 probe IDs to ENSEMBL IDs
+```{r}
+# GRCh38.p14 reference genome
+ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+BM_probe_to_ensg <- getBM(attributes=c("affy_hg_u133_plus_2", "ensembl_gene_id"), filters = "affy_hg_u133_plus_2", values = probes, mart=ensembl)
+
+# make sure no duplicated entries (why would there be but just in case before next analysis cell)
+sum(duplicated(BC_probe_to_ensg)) == 0
+```
+
+
+Seeing how much each data.frame covers our dataset more (spoiler alert: it's biomaRt.)
+```{r}
+print(" BIOCONDUCTOR ")
+cat("num of matrix entries NOT in dict:", sum(!(rownames(matrix)) %in% BC_probe_to_ensg$probe_id), "\n") 
+
+#   --
+
+print(" BIOMART ")
+cat("num of matrix entries NOT in dict:", sum(!(rownames(matrix)) %in% BM_probe_to_ensg$affy_hg_u133_plus_2), "\n") 
+```
+ 
+Counting repeated values in the two tables
+```{r}
+print(" BIOCONDUCTOR ")
+# total entries in table
+cat("total entries:", length(BC_probe_to_ensg[[1]]), "\n")
+
+# repeat probe IDs
+BC_probe_counts <- table(BC_probe_to_ensg[[1]])
+BC_repeat_probes <- names(BC_probe_counts[BC_probe_counts > 1])
+cat("num of unique probe IDs:", length(BC_probe_counts), "\n")
+cat("num of probe IDs with > 1 entry:", length(BC_repeat_probes), "\n")
+
+# repeat ENSEMBL IDs
+BC_ensg_counts <- table(BC_probe_to_ensg[[2]])
+BC_repeat_ensg <- names(BC_ensg_counts[BC_ensg_counts > 1])
+cat("num of unique ensembl IDs:", length(BC_ensg_counts), "\n")
+cat("num of ensembl IDs with > 1 entry:", length(BC_repeat_ensg), "\n")
+
+#   --
+
+print(" BIOMART ")
+# total entries in table
+cat("total entries:", length(BM_probe_to_ensg[[1]]), "\n")
+
+# repeat probe IDs
+BM_probe_counts <- table(BM_probe_to_ensg[[1]])
+BM_repeat_probes <- names(BM_probe_counts[BM_probe_counts > 1])
+cat("num of unique probe IDs:", length(BM_probe_counts), "\n")
+cat("num of probe IDs with > 1 entry:", length(BM_repeat_probes), "\n")
+
+# repeat ENSEMBL IDs
+BM_ensg_counts <- table(BM_probe_to_ensg[[2]])
+BM_repeat_ensg <- names(BM_ensg_counts[BM_ensg_counts > 1])
+cat("num of unique ensembl IDs:", length(BM_ensg_counts), "\n")
+cat("num of ensembl IDs with > 1 entry:", length(BM_repeat_ensg), "\n")
+```
+```{r}
+length(unique(BM_probe_to_ensg[[2]]))
+```
+
+Filter by biomaRt
+```{r}
+# remove repeat affy probe IDs (eliminate samples with the one-to-many mapping from affy probe ID to ensembl ID)
+# remove samples with affy probe IDs not found in our dictionary
+# will deal with the many-to-one mapping in python as I combine this dataset with the others
+unique_affy_ids <- setdiff(rownames(matrix), BM_repeat_probes) # remove repeat affy IDs
+missing_affy_ids <- setdiff(unique_affy_ids, BM_probe_to_ensg$affy_hg_u133_plus_2) # remove affy IDs whose mappings are not present in biomaRt dict
+affy_ids <- setdiff(unique_affy_ids, missing_affy_ids)
+
+new_matrix <- matrix[affy_ids, ]
+```
+
+```{r}
+jetset_probe_scores <- jscores("hgu133plus2", probeset=rownames(new_matrix))
+jetset_probe_scores
+
+# TODO: remove BM_repeat_probes from BM_probe_to_ensg. can do this above instead of removing repeat IDs just from the data (just replace the line)
+# TODO: in BM_probe_to_ensg, find affy probes that map to same ensembl ID. look up their overall scores and remove everyone except the highest
+BM_repeat_probes
+```
+
+```{r}
+# replace first column in matrix with ensembl IDs
+rownames(new_matrix) <- as.character(BM_probe_to_ensg$ensembl_gene_id[match(rownames(new_matrix),BM_probe_to_ensg$affy_hg_u133_plus_2)])
+```
+
+Various checks
+```{r}
+# what the final nrows of matrix should be after removing
+final_size <- nrow(matrix) - sum(BM_repeat_probes %in% rownames(matrix)) - sum(!(rownames(matrix) %in% BM_probe_to_ensg$affy_hg_u133_plus_2))
+
+cat("num of missing rownames:", sum(is.na(rownames(new_matrix))), "\n")
+cat("is the final matrix size as expected?:", nrow(new_matrix) == final_size, "\n")
+cat("fraction of unique ensembl IDs out of total:", length(unique(rownames(new_matrix))), "/", length(rownames(new_matrix)))
+```
+
+```{r}
+# new_matrix <- data.frame(new_matrix)
+# colnames(new_matrix) <- c(
+#   "GC_40", 
+#   "GC_43", 
+#   "GC_50", 
+#   "PC_30", 
+#   "PC_33", 
+#   "PC_44", 
+#   "Naive_39", 
+#   "Naive_41", 
+#   "Naive_48", 
+#   "MM_28", 
+#   "MM_36", 
+#   "MM_38"
+# )
+# length(unique(rownames(new_matrix))) # TODO: remove
+# rownames(new_matrix)
+# 
+# new_matrix <- tibble::rownames_to_column(new_matrix, "gene_ensemble")
+# new_matrix$gene_ensemble <- sub("\\.\\d+$", "", new_matrix$gene_ensemble) # data.frame can't have duplicate rownames
+# head(new_matrix)
+```
+ 
+Write gene expression matrix to .txt files
+```{r}
+write.table(new_matrix, file="longo_data/GSE12366_genematrix.txt", sep =",", dec =".", row.names=TRUE, col.names=TRUE)
+```
+
