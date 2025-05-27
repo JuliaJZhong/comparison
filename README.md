@@ -2,7 +2,7 @@
 
 This is the code that I used to do some preliminary analysis and comparisons between three datasets:
 
-1. [GSE242931](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSM7775222) from Kuehn et al. (2024) 
+1. [GSE242931](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE242931) from Kuehn et al. (2024) 
 2. [GSE12366](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE12366) from Longo et al. (2009)
 3. Unstimulated B cells from Christine's cytokine experiments
 
